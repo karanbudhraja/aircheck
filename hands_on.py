@@ -51,7 +51,7 @@ data_processing_pipeline = Pipeline([
 	('scaler', StandardScaler()),
 ])
 data_processing_pipeline.fit(data_x)
-data_x = data_processing_pipeline.transform(data_x)
+#data_x = data_processing_pipeline.transform(data_x)
 
 #
 # Split data
@@ -64,11 +64,27 @@ for fold, (train_idx, test_idx) in enumerate(k_fold.split(data_x, data_y, groups
 	train_x, train_y = data_x[train_idx], data_y[train_idx]
 	test_x, test_y = data_x[test_idx], data_y[test_idx]
 
+	# base occurrence rate
+	base_score = test_y.sum() / len(test_y)
+	print(base_score)
+
+	# downsample negative class
+	positive_indexes = np.where(train_y == 1)[0]
+	negative_indexes = np.where(train_y == 0)[0]
+	np.random.seed(RANDOM_STATE)
+	negative_indexes = np.random.choice(negative_indexes, size=10*len(positive_indexes), replace=False)
+	used_indexes = np.concatenate([positive_indexes, negative_indexes])
+
+	train_x = train_x[used_indexes]
+	train_y = train_y.iloc[used_indexes]
+
 	# train model
 	model = XGBClassifier(
 		n_estimators=100,
-		eval_metric='logloss',
+		eval_metric='aucpr',
 		random_state=RANDOM_STATE,
+		base_score=base_score,
+		max_delta_step=1,
 	)
 	model.fit(train_x, train_y)
 	
