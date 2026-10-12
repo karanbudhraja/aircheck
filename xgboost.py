@@ -108,7 +108,3 @@ for fold, (train_idx, test_idx) in enumerate(k_fold.split(data_x, data_y, groups
 	
 	print(result)
 
-	break
-
-
-
