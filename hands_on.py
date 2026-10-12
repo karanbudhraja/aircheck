@@ -45,10 +45,14 @@ data_y = data[y_column]
 # random seed for reproducibility
 k_fold = StratifiedGroupKFold(n_splits=3, shuffle=True, random_state=0)
 for fold, (train_idx, test_idx) in enumerate(k_fold.split(data_x, data_y, groups=data_scaffold)):
+	# get data for this split
 	train_x, train_y = data_x[train_idx], data_y[train_idx]
 	test_x, test_y = data_x[test_idx], data_y[test_idx]
-	print(train_x.shape, train_y.shape)
 
+	# train model
+	print(train_x.max())
+	
+	# evaluate model
 
 
 
