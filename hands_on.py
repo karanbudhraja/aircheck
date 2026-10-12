@@ -5,6 +5,7 @@ from rdkit import Chem
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import TruncatedSVD
+from sklearn.metrics import average_precision_score
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
@@ -68,13 +69,13 @@ for fold, (train_idx, test_idx) in enumerate(k_fold.split(data_x, data_y, groups
 		n_estimators=100,
 		eval_metric='logloss',
 		random_state=RANDOM_STATE,
-	))
+	)
 	model.fit(train_x, train_y)
 	
 	# evaluate model
-
-
-
+	predicted_y = model.predict_proba(test_x)[:, 1]
+	score = average_precision_score(test_y, predicted_y)
+	print(score)
 
 
 	break
