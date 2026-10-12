@@ -7,6 +7,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.decomposition import TruncatedSVD
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.preprocessing import StandardScaler
+from xgboost import XGBClassifier
 
 INPUT_DATA_PATH = "~/Downloads/DREAM_Challenge_1_TrainSet.parquet"
 DATA_SUBSET_FRACTION = 0.01
@@ -47,7 +48,7 @@ data_y = data[y_column]
 data_processing_pipeline = Pipeline([
 	('svd', TruncatedSVD(n_components=100, random_state=RANDOM_STATE)),
 	('scaler', StandardScaler()),
-	])
+])
 data_processing_pipeline.fit(data_x)
 data_x = data_processing_pipeline.transform(data_x)
 
@@ -63,6 +64,12 @@ for fold, (train_idx, test_idx) in enumerate(k_fold.split(data_x, data_y, groups
 	test_x, test_y = data_x[test_idx], data_y[test_idx]
 
 	# train model
+	model = XGBClassifier(
+		n_estimators=100,
+		eval_metric='logloss',
+		random_state=RANDOM_STATE,
+	))
+	model.fit(train_x, train_y)
 	
 	# evaluate model
 
