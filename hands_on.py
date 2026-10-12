@@ -5,7 +5,7 @@ from rdkit import Chem
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import TruncatedSVD
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import precision_score, recall_score, roc_auc_score, balanced_accuracy_score, average_precision_score
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
@@ -73,10 +73,24 @@ for fold, (train_idx, test_idx) in enumerate(k_fold.split(data_x, data_y, groups
 	model.fit(train_x, train_y)
 	
 	# evaluate model
-	predicted_y = model.predict_proba(test_x)[:, 1]
-	score = average_precision_score(test_y, predicted_y)
-	print(score)
-
+	predicted_y_continuous = model.predict_proba(test_x)[:, 1]
+	predicted_y_discrete = model.predict(test_x)	
+	
+	ppv = precision_score(test_y, predicted_y_discrete)
+	recall = recall_score(test_y, predicted_y_discrete)
+	auc_roc = roc_auc_score(test_y, predicted_y_continuous)
+	ba = balanced_accuracy_score(test_y, predicted_y_discrete)
+	auc_pr = average_precision_score(test_y, predicted_y_continuous)
+	
+	result = {
+		"ppv": ppv,
+		"recall": recall,
+		"auc_roc": auc_roc,
+		"ba": ba,
+		"auc_pr": auc_pr,
+	}
+	
+	print(result)
 
 	break
 
