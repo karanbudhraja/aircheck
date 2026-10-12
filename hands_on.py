@@ -3,10 +3,14 @@ import pandas as pd
 import pyarrow.parquet as pq
 from rdkit import Chem
 from rdkit.Chem.Scaffolds import MurckoScaffold
+from sklearn.pipeline import Pipeline
+from sklearn.decomposition import TruncatedSVD
 from sklearn.model_selection import StratifiedGroupKFold
+from sklearn.preprocessing import StandardScaler
 
 INPUT_DATA_PATH = "~/Downloads/DREAM_Challenge_1_TrainSet.parquet"
 DATA_SUBSET_FRACTION = 0.01
+RANDOM_STATE = 0
 
 #
 # Load data
@@ -38,19 +42,27 @@ y_column = "LABEL"
 data_x = np.hstack([np.vstack(data[x]) for x in x_columns])
 data_y = data[y_column]
 
+# dimensionality reduction
+# scaling
+data_processing_pipeline = Pipeline([
+	('svd', TruncatedSVD(n_components=100, random_state=RANDOM_STATE)),
+	('scaler', StandardScaler()),
+	])
+data_processing_pipeline.fit(data_x)
+data_x = data_processing_pipeline.transform(data_x)
+
 #
 # Split data
 #
 
 # random seed for reproducibility
-k_fold = StratifiedGroupKFold(n_splits=3, shuffle=True, random_state=0)
+k_fold = StratifiedGroupKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
 for fold, (train_idx, test_idx) in enumerate(k_fold.split(data_x, data_y, groups=data_scaffold)):
 	# get data for this split
 	train_x, train_y = data_x[train_idx], data_y[train_idx]
 	test_x, test_y = data_x[test_idx], data_y[test_idx]
 
 	# train model
-	print(train_x.max())
 	
 	# evaluate model
 
@@ -58,7 +70,7 @@ for fold, (train_idx, test_idx) in enumerate(k_fold.split(data_x, data_y, groups
 
 
 
-
+	break
 
 
 
