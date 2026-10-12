@@ -1,2 +1,2 @@
 # aircheck
-AIRCHECK hands-on
+AIRCHECK hands-on using the [WDR91 challenge dataset](https://www.aircheck.ai/challenges) (`tMUn0KtPuyHrJFDrtGCN-V1`)
