@@ -103,6 +103,7 @@ for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_
 	batch_data = batch.to_pandas()
 	batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
 	batch_data_x = ipca.transform(batch_data_x)
+	batch_data_y = batch_data[y_column]
 
 	print(f"Applied IPCA to data batch # {index+1}")
 
