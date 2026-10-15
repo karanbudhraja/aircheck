@@ -139,21 +139,6 @@ for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_
 # ~ )
 # ~ data = data[data_scaffold.notna()]
 
-# ~ # columns subset
-# ~ x_columns = ["AVALON", "FCFP4", "FCFP6"]
-# ~ y_column = "LABEL"
-# ~ data_x = np.hstack([np.vstack(data[x]) for x in x_columns])
-# ~ data_y = data[y_column]
-
-# ~ # dimensionality reduction
-# ~ # scaling
-# ~ data_processing_pipeline = Pipeline([
-	# ~ ('svd', TruncatedSVD(n_components=100, random_state=RANDOM_STATE)),
-	# ~ ('scaler', StandardScaler()),
-# ~ ])
-# ~ data_processing_pipeline.fit(data_x)
-# ~ #data_x = data_processing_pipeline.transform(data_x)
-
 # ~ #
 # ~ # Split data
 # ~ #
