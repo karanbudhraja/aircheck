@@ -132,8 +132,10 @@ for epoch in range(N_EPOCHS):
 		break
 		
 	# calculate global metrics for this epoch
+	model.reset_metrics()
+	
 	epoch_loss = 0
-	data_y_preds = []
+	total_processed_rows = 0
 	for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
 		batch_data = batch.to_pandas()
 		batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
@@ -143,11 +145,19 @@ for epoch in range(N_EPOCHS):
 		metrics_output = model.test_on_batch(batch_data_x, batch_data_y)
 		loss, pr_auc, precision, recall = metrics_output
 		epoch_loss += loss * len(batch_data_y)
-
-		# get predicted values
-		batch_data_y_preds = model.predict_on_batch(batch_data_x).flatten()
+		total_processed_rows += len(batch_data_y)
 		
 		break
+	
+	# calculate weighted average
+	epoch_loss /= total_processed_rows
+
+	# get epoch metrics
+	epoch_metrics = model.get_metrics_result()
+	pr_auc = epoch_metrics["pr_auc"]
+	precision = epoch_metrics["precision"]
+	recall = epoch_metrics["recall"]
+	print(f"Epoch {epoch+1} -> Loss: {epoch_loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 	
 	break
 
