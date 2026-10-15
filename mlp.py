@@ -10,6 +10,7 @@ INPUT_DATA_PATH = "~/Downloads/DREAM_Challenge_1_TrainSet.parquet"
 DATA_SUBSET_FRACTION = 0.01
 N_COMPONENTS = 1000
 RANDOM_STATE = 0
+N_EPOCHS = 10
 
 is_use_cache = True
 
@@ -67,55 +68,93 @@ if (is_use_cache == False) or (os.path.exists(save_path) == False):
 
 base_occurrence_rate = joblib.load(save_path)
 
-# ~ #    
-# ~ # Project data and train model
-# ~ #
+#    
+# Project data and train model
+#
 
-# ~ # standard scikit-learn formula: weight = 1 / (num_classes * class_rate)
-# ~ weight_occurrence = 1.0 / (2 * base_occurrence_rate)
-# ~ weight_non_occurrence = 1.0 / (2 * (1-base_occurrence_rate))
+# standard scikit-learn formula: weight = 1 / (num_classes * class_rate)
+weight_occurrence = 1.0 / (2 * base_occurrence_rate)
+weight_non_occurrence = 1.0 / (2 * (1-base_occurrence_rate))
 
-# ~ model = models.Sequential([
-	# ~ layers.Input(shape=(N_COMPONENTS,)),
-	# ~ layers.Dense(64, activation='relu'),
-	# ~ layers.Dropout(0.3),
-	# ~ layers.Dense(1, activation='sigmoid')
-	# ~ ])
+model = models.Sequential([
+	layers.Input(shape=(N_COMPONENTS,)),
+	layers.Dense(256, activation='relu'),
+	layers.Dropout(0.3),
+	layers.Dense(64, activation='relu'),
+	layers.Dropout(0.2),
+	layers.Dense(1, activation='sigmoid')
+	])
 	
-# ~ model_metrics = [
-    # ~ metrics.AUC(curve='PR', name='pr_auc'),
-    # ~ metrics.Precision(name='precision'),
-    # ~ metrics.Recall(name='recall')
-# ~ ]
-# ~ model.compile(
-	# ~ optimizer=optimizers.Adam(learning_rate=0.001),
-	# ~ loss=losses.BinaryCrossentropy(),
-	# ~ metrics=model_metrics
-	# ~ )
+model_metrics = [
+    metrics.AUC(curve='PR', name='pr_auc'),
+    metrics.Precision(name='precision'),
+    metrics.Recall(name='recall')
+]
+model.compile(
+	optimizer=optimizers.Adam(learning_rate=0.001),
+	loss=losses.BinaryCrossentropy(),
+	metrics=model_metrics
+	)
 
-# ~ for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
-	# ~ batch_data = batch.to_pandas()
-	# ~ batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
-	# ~ batch_data_x = ipca.transform(batch_data_x)
-	# ~ batch_data_y = batch_data[y_column]
+for epoch in range(N_EPOCHS):
+	epoch_batch_metrics_data = []
+	for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+		batch_data = batch.to_pandas()
 
-	# ~ print(f"Applied IPCA to data batch # {index+1}")
+		# shuffle data
+		batch_data = batch_data.sample(frac=1, random_state=RANDOM_STATE)
 
-	# ~ # use this data to train the model
-	# ~ # class imbalance handling using weights
-	# ~ metrics_output = model.train_on_batch(
-        # ~ batch_data_x, 
-        # ~ batch_data_y,
-        # ~ class_weight={0: weight_non_occurrence, 1: weight_occurrence}
-    # ~ )
+		batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
+		batch_data_x = ipca.transform(batch_data_x)
+		batch_data_y = batch_data[y_column]
+
+		print(f"Applied IPCA to data batch # {index+1}")
+
+		# use this data to train the model
+		# class imbalance handling using weights
+		metrics_output = model.train_on_batch(
+			batch_data_x, 
+			batch_data_y,
+			class_weight={0: weight_non_occurrence, 1: weight_occurrence}
+		)
+		
+		loss, pr_auc, precision, recall = metrics_output
+		print(f"Epoch {epoch+1} Batch {index+1} -> Loss: {loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+
+		current_metrics_data = {
+		"loss": loss,
+		"pr_auc": pr_auc,
+		"precision": precision,
+		"recall": recall,
+		}
+		epoch_batch_metrics_data.append(current_metrics_data)
+		
+		break
+		
+	# calculate global metrics for this epoch
+	epoch_loss = 0
+	data_y_preds = []
+	for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+		batch_data = batch.to_pandas()
+		batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
+		batch_data_x = ipca.transform(batch_data_x)
+		batch_data_y = batch_data[y_column]
+		
+		metrics_output = model.test_on_batch(batch_data_x, batch_data_y)
+		loss, pr_auc, precision, recall = metrics_output
+		epoch_loss += loss * len(batch_data_y)
+
+		# get predicted values
+		batch_data_y_preds = model.predict_on_batch(batch_data_x).flatten()
+		
+		break
 	
-	# ~ x = 1
-	# ~ loss, pr_auc, precision, recall = metrics_output
-	# ~ print(f"Batch {index+1} -> Loss: {loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
-    
-	# ~ # TODO: REMOVE FOR FULL DATA RUN
-	# ~ if(index == 1):
-		# ~ break
+	break
+
+
+
+# ~ metrics_data = pd.DataFrame(metrics_data)
+# ~ metrics_data.to_csv("mlp.metrics_data.csv")
 
 # ~ # save model
 # ~ model.save("mlp.keras")
