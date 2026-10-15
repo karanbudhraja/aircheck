@@ -5,3 +5,5 @@ lib
 lib64
 *.joblib
 *.keras
+*.pickle
+*.csv
