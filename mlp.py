@@ -1,4 +1,5 @@
 import joblib
+import keras
 from keras import metrics, models, layers, optimizers, losses
 import numpy as np
 import os
@@ -32,10 +33,15 @@ y_column = "LABEL"
 
 save_path = f"ipca.{N_COMPONENTS}.joblib"
 if (is_use_cache == False) or (os.path.exists(save_path) == False):
-	ipca = IncrementalPCA(n_components=N_COMPONENTS, batch_size=subset_row_count)
+	ipca = IncrementalPCA(n_components=N_COMPONENTS, batch_size=subset_row_count, whiten=True)
 	for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
 		batch_data = batch.to_pandas()
 		batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
+
+		# skip if insufficient rows
+		if len(batch_data_x) < N_COMPONENTS:
+			print(f"Skipping IPCA batch # {index+1} ({len(batch_data_x)} rows)")
+			continue
 		ipca.partial_fit(batch_data_x)
 	  
 		print(f"Processed IPCA fit batch # {index+1}")
@@ -67,10 +73,13 @@ if (is_use_cache == False) or (os.path.exists(save_path) == False):
 	joblib.dump(base_occurrence_rate, save_path)
 
 base_occurrence_rate = joblib.load(save_path)
+print(f"Base occurrence rate is {base_occurrence_rate}")
 
 #    
 # Project data and train model
 #
+
+keras.utils.set_random_seed(RANDOM_STATE)
 
 # standard scikit-learn formula: weight = 1 / (num_classes * class_rate)
 weight_occurrence = 1.0 / (2 * base_occurrence_rate)
@@ -100,34 +109,29 @@ epoch_metrics_data = []
 for epoch in range(N_EPOCHS):
 	epoch_batch_metrics_data = []
 	for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+		# cast to float32 for speed and memory
 		batch_data = batch.to_pandas()
-
-		# shuffle data
-		batch_data = batch_data.sample(frac=1, random_state=RANDOM_STATE)
-
 		batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
-		batch_data_x = ipca.transform(batch_data_x)
+		batch_data_x = ipca.transform(batch_data_x).astype(np.float32)
 		batch_data_y = batch_data[y_column]
-
-		print(f"Applied IPCA to data batch # {index+1}")
 
 		# use this data to train the model
 		# class imbalance handling using weights
-		metrics_output = model.train_on_batch(
+		history = model.fit(
 			batch_data_x, 
-			batch_data_y,
-			class_weight={0: weight_non_occurrence, 1: weight_occurrence}
-		)
+			batch_data_y, 
+			batch_size=256,
+			class_weight={0: weight_non_occurrence, 1: weight_occurrence},
+			verbose=0
+			)
+		current_metrics_data = {k: v[-1] for k, v in history.history.items()}
 		
-		loss, pr_auc, precision, recall = metrics_output
+		loss = current_metrics_data["loss"]
+		pr_auc = current_metrics_data["pr_auc"]
+		precision = current_metrics_data["precision"]
+		recall = current_metrics_data["recall"]
 		print(f"Epoch {epoch+1} Batch {index+1} -> Loss: {loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 
-		current_metrics_data = {
-		"loss": loss,
-		"pr_auc": pr_auc,
-		"precision": precision,
-		"recall": recall,
-		}
 		epoch_batch_metrics_data.append(current_metrics_data)
 
 	epoch_batch_metrics_data = pd.DataFrame(epoch_batch_metrics_data)
@@ -136,30 +140,22 @@ for epoch in range(N_EPOCHS):
 	# calculate global metrics for this epoch
 	model.reset_metrics()
 	
-	epoch_loss = 0
-	total_processed_rows = 0
 	for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+		# cast to float32 for speed and memory
 		batch_data = batch.to_pandas()
 		batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
-		batch_data_x = ipca.transform(batch_data_x)
+		batch_data_x = ipca.transform(batch_data_x).astype(np.float32)
 		batch_data_y = batch_data[y_column]
-		
-		metrics_output = model.test_on_batch(batch_data_x, batch_data_y)
-		loss, pr_auc, precision, recall = metrics_output
-		epoch_loss += loss * len(batch_data_y)
-		total_processed_rows += len(batch_data_y)
-			
-	# calculate weighted average
-	epoch_loss /= total_processed_rows
+		model.test_on_batch(batch_data_x, batch_data_y)
 
 	# get epoch metrics
-	epoch_metrics = model.get_metrics_result()
+	epoch_metrics = {k: float(v) for k, v in model.get_metrics_result().items()}
+	loss = epoch_metrics["loss"]
 	pr_auc = epoch_metrics["pr_auc"]
 	precision = epoch_metrics["precision"]
 	recall = epoch_metrics["recall"]
-	print(f"Epoch {epoch+1} -> Loss: {epoch_loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+	print(f"Epoch {epoch+1} -> Loss: {loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 
-	epoch_metrics["loss"] = epoch_loss
 	epoch_metrics_data.append(epoch_metrics)
 
 epoch_metrics_data = pd.DataFrame(epoch_metrics_data)
