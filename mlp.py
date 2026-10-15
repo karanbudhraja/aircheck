@@ -8,7 +8,7 @@ from sklearn.decomposition import IncrementalPCA
 
 INPUT_DATA_PATH = "~/Downloads/DREAM_Challenge_1_TrainSet.parquet"
 DATA_SUBSET_FRACTION = 0.01
-N_COMPONENTS = 100
+N_COMPONENTS = 1000
 RANDOM_STATE = 0
 
 is_use_cache = True
@@ -44,25 +44,28 @@ if (is_use_cache == False) or (os.path.exists(save_path) == False):
 
 ipca = joblib.load(save_path)
 
-# ~ #
-# ~ # Base occurrence rate
-# ~ #
+#
+# Base occurrence rate
+#
 
-# ~ occurrence_count = 0
-# ~ total_count = 0
-# ~ for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
-	# ~ batch_data = batch.to_pandas()
-	# ~ batch_data_y = batch_data[y_column]
-	# ~ occurrence_count += batch_data_y.sum()
-	# ~ total_count += len(batch_data_y)
+save_path = f"base_occurrence_rate.joblib"
+if (is_use_cache == False) or (os.path.exists(save_path) == False):
+	occurrence_count = 0
+	total_count = 0
+	for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+		batch_data = batch.to_pandas()
+		batch_data_y = batch_data[y_column]
+		occurrence_count += batch_data_y.sum()
+		total_count += len(batch_data_y)
 
-	# ~ print(f"Processed base occurrence batch # {index+1}")
-	
-	# TODO: REMOVE FOR FULL DATA RUN
-	# ~ if(index == 10):
-		# ~ break
+		print(f"Processed base occurrence batch # {index+1}")
 
-# ~ base_occurrence_rate = occurrence_count / total_count
+	base_occurrence_rate = occurrence_count / total_count
+
+	# save to cache
+	joblib.dump(base_occurrence_rate, save_path)
+
+base_occurrence_rate = joblib.load(save_path)
 
 # ~ #    
 # ~ # Project data and train model
