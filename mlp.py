@@ -128,9 +128,7 @@ for epoch in range(N_EPOCHS):
 		"recall": recall,
 		}
 		epoch_batch_metrics_data.append(current_metrics_data)
-		
-		break
-		
+				
 	# calculate global metrics for this epoch
 	model.reset_metrics()
 	
@@ -146,9 +144,7 @@ for epoch in range(N_EPOCHS):
 		loss, pr_auc, precision, recall = metrics_output
 		epoch_loss += loss * len(batch_data_y)
 		total_processed_rows += len(batch_data_y)
-		
-		break
-	
+			
 	# calculate weighted average
 	epoch_loss /= total_processed_rows
 
@@ -159,9 +155,6 @@ for epoch in range(N_EPOCHS):
 	recall = epoch_metrics["recall"]
 	print(f"Epoch {epoch+1} -> Loss: {epoch_loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 	
-	break
-
-
 
 # ~ metrics_data = pd.DataFrame(metrics_data)
 # ~ metrics_data.to_csv("mlp.metrics_data.csv")
