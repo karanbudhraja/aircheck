@@ -96,6 +96,7 @@ model.compile(
 	metrics=model_metrics
 	)
 
+epoch_metrics_data = []
 for epoch in range(N_EPOCHS):
 	epoch_batch_metrics_data = []
 	for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
@@ -128,6 +129,9 @@ for epoch in range(N_EPOCHS):
 		"recall": recall,
 		}
 		epoch_batch_metrics_data.append(current_metrics_data)
+
+	epoch_batch_metrics_data = pd.DataFrame(epoch_batch_metrics_data)
+	epoch_batch_metrics_data.to_csv(f"mlp.epoch_batch_metrics_data.{epoch+1}.csv")
 				
 	# calculate global metrics for this epoch
 	model.reset_metrics()
@@ -154,10 +158,12 @@ for epoch in range(N_EPOCHS):
 	precision = epoch_metrics["precision"]
 	recall = epoch_metrics["recall"]
 	print(f"Epoch {epoch+1} -> Loss: {epoch_loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
-	
 
-# ~ metrics_data = pd.DataFrame(metrics_data)
-# ~ metrics_data.to_csv("mlp.metrics_data.csv")
+	epoch_metrics["loss"] = epoch_loss
+	epoch_metrics_data.append(epoch_metrics)
+
+epoch_metrics_data = pd.DataFrame(epoch_metrics_data)
+epoch_metrics_data.to_csv("mlp.epoch_metrics_data.csv")
 
 # ~ # save model
 # ~ model.save("mlp.keras")
