@@ -33,9 +33,9 @@ for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_
   
 	print(f"Processed IPCA fit batch # {index+1}")
 	
-	# TODO: REMOVE FOR FULL DATA RUN
-	if(index == 1):
-		break
+	# ~ # TODO: REMOVE FOR FULL DATA RUN
+	# ~ if(index == 1):
+		# ~ break
 
 #
 # Base occurrence rate
@@ -51,9 +51,9 @@ for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_
 
 	print(f"Processed base occurrence batch # {index+1}")
 	
-	# TODO: REMOVE FOR FULL DATA RUN
-	if(index == 10):
-		break
+	# ~ # TODO: REMOVE FOR FULL DATA RUN
+	# ~ if(index == 10):
+		# ~ break
 
 base_occurrence_rate = occurrence_count / total_count
 
@@ -103,6 +103,9 @@ for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_
 	loss, pr_auc, precision, recall = metrics_output
 	print(f"Batch {index+1} -> Loss: {loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
     
-	# TODO: REMOVE FOR FULL DATA RUN
-	if(index == 1):
-		break
+	# ~ # TODO: REMOVE FOR FULL DATA RUN
+	# ~ if(index == 1):
+		# ~ break
+
+# save model
+model.save("mlp.keras")
