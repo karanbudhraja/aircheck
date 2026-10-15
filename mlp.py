@@ -1,5 +1,6 @@
 from keras import metrics, models, layers, optimizers, losses
 import numpy as np
+import os
 import pandas as pd
 import pyarrow.parquet as pq
 from rdkit import Chem
@@ -9,11 +10,20 @@ from sklearn.metrics import precision_score, recall_score, roc_auc_score, balanc
 # ~ from sklearn.preprocessing import StandardScaler
 # ~ from xgboost import XGBClassifier
 from sklearn.decomposition import IncrementalPCA
+import tensorflow as tf
 
 INPUT_DATA_PATH = "~/Downloads/DREAM_Challenge_1_TrainSet.parquet"
 DATA_SUBSET_FRACTION = 0.001
 N_COMPONENTS = 100
 RANDOM_STATE = 0
+
+#
+# Logging
+#
+
+# run on cpu
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+tf.get_logger().setLevel('ERROR') 
 
 #
 # Load data
@@ -95,7 +105,7 @@ for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_
 	batch_data_x = ipca.transform(batch_data_x)
 
 	print(f"Applied IPCA to data batch # {index+1}")
-	
+
 	# use this data to train the model
 	# class imbalance handling using weights
 	metrics_output = model.train_on_batch(
@@ -103,20 +113,11 @@ for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_
         batch_data_y,
         class_weight={0: weight_non_occurrence, 1: weight_occurrence}
     )
-    
-    
-    # ~ x = 1
-    
-    
-    
-    # ~ loss, pr_auc = metrics_output
-    
-    
-    # ~ loss, pr_auc, precision, recall = metrics_output
-    
-    
-    # ~ print(f"Batch {index+1} -> Loss: {loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 	
+	x = 1
+	loss, pr_auc, precision, recall = metrics_output
+	print(f"Batch {index+1} -> Loss: {loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+    
 	# TODO: REMOVE FOR FULL DATA RUN
 	if(index == 1):
 		break
