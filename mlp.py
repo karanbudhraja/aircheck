@@ -8,11 +8,14 @@ import pyarrow.parquet as pq
 from sklearn.decomposition import IncrementalPCA
 from sklearn.metrics import average_precision_score, precision_score, recall_score, log_loss
 
-INPUT_DATA_PATH = "~/Downloads/DREAM_Challenge_1_TrainSet.parquet"
+# ~ INPUT_DATA_PATH = "~/Downloads/DREAM_Challenge_1_TrainSet.parquet"
+INPUT_DATA_PATH = "~/Downloads/DREAM_Challenge_1_TrainSet.subset.parquet"
+
+
 DATA_SUBSET_FRACTION = 0.01
 N_COMPONENTS = 1000
 RANDOM_STATE = 0
-N_EPOCHS = 10
+N_EPOCHS = 30
 
 is_use_cache = True
 
@@ -83,8 +86,11 @@ print(f"Base occurrence rate is {base_occurrence_rate}")
 keras.utils.set_random_seed(RANDOM_STATE)
 
 # standard scikit-learn formula: weight = 1 / (num_classes * class_rate)
-weight_occurrence = 1.0 / (2 * base_occurrence_rate)
-weight_non_occurrence = 1.0 / (2 * (1-base_occurrence_rate))
+# manual limit based on square root of class imbalance
+# ~ weight_occurrence = 1.0 / (2 * base_occurrence_rate)
+# ~ weight_non_occurrence = 1.0 / (2 * (1-base_occurrence_rate))
+weight_occurrence = min(1.0 / base_occurrence_rate, 30.0)
+weight_non_occurrence = 1.0
 
 model = models.Sequential([
 	layers.Input(shape=(N_COMPONENTS,)),
@@ -101,7 +107,7 @@ model_metrics = [
     metrics.Recall(name='recall')
 ]
 model.compile(
-	optimizer=optimizers.Adam(learning_rate=0.001),
+	optimizer=optimizers.Adam(learning_rate=1e-4),
 	loss=losses.BinaryCrossentropy(),
 	metrics=model_metrics
 	)
@@ -160,29 +166,6 @@ for epoch in range(N_EPOCHS):
 	print(f"Epoch {epoch+1} -> Loss: {epoch_metrics['loss']:.4f} | PR-AUC: {epoch_metrics['pr_auc']:.4f} | "
 	      f"Precision: {epoch_metrics['precision']:.4f} | Recall: {epoch_metrics['recall']:.4f}")
 	epoch_metrics_data.append(epoch_metrics)
-
-
-				
-	# ~ # calculate global metrics for this epoch
-	# ~ model.reset_metrics()
-	
-	# ~ for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
-		# ~ # cast to float32 for speed and memory
-		# ~ batch_data = batch.to_pandas()
-		# ~ batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
-		# ~ batch_data_x = ipca.transform(batch_data_x).astype(np.float32)
-		# ~ batch_data_y = batch_data[y_column]
-		# ~ model.test_on_batch(batch_data_x, batch_data_y)
-
-	# ~ # get epoch metrics
-	# ~ epoch_metrics = {k: float(v) for k, v in model.get_metrics_result().items()}
-	# ~ loss = epoch_metrics["loss"]
-	# ~ pr_auc = epoch_metrics["pr_auc"]
-	# ~ precision = epoch_metrics["precision"]
-	# ~ recall = epoch_metrics["recall"]
-	# ~ print(f"Epoch {epoch+1} -> Loss: {loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
-
-	# ~ epoch_metrics_data.append(epoch_metrics)
 
 epoch_metrics_data = pd.DataFrame(epoch_metrics_data)
 epoch_metrics_data.to_csv("mlp.epoch_metrics_data.csv")
