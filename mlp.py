@@ -137,27 +137,52 @@ for epoch in range(N_EPOCHS):
 
 	epoch_batch_metrics_data = pd.DataFrame(epoch_batch_metrics_data)
 	epoch_batch_metrics_data.to_csv(f"mlp.epoch_batch_metrics_data.{epoch+1}.csv")
-				
+
 	# calculate global metrics for this epoch
-	model.reset_metrics()
-	
+	y_true, y_prob = [], []
 	for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
-		# cast to float32 for speed and memory
 		batch_data = batch.to_pandas()
 		batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
 		batch_data_x = ipca.transform(batch_data_x).astype(np.float32)
-		batch_data_y = batch_data[y_column]
-		model.test_on_batch(batch_data_x, batch_data_y)
+		y_prob.append(model.predict(batch_data_x, batch_size=4096, verbose=0).ravel())
+		y_true.append(batch_data[y_column].to_numpy())
 
-	# get epoch metrics
-	epoch_metrics = {k: float(v) for k, v in model.get_metrics_result().items()}
-	loss = epoch_metrics["loss"]
-	pr_auc = epoch_metrics["pr_auc"]
-	precision = epoch_metrics["precision"]
-	recall = epoch_metrics["recall"]
-	print(f"Epoch {epoch+1} -> Loss: {loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+	y_true = np.concatenate(y_true)
+	y_prob = np.concatenate(y_prob)
+	y_pred = (y_prob >= 0.5).astype(int)
 
+	epoch_metrics = {
+		"loss": log_loss(y_true, y_prob, labels=[0, 1]),
+		"pr_auc": average_precision_score(y_true, y_prob),
+		"precision": precision_score(y_true, y_pred, zero_division=0),
+		"recall": recall_score(y_true, y_pred, zero_division=0),
+	}
+	print(f"Epoch {epoch+1} -> Loss: {epoch_metrics['loss']:.4f} | PR-AUC: {epoch_metrics['pr_auc']:.4f} | "
+	      f"Precision: {epoch_metrics['precision']:.4f} | Recall: {epoch_metrics['recall']:.4f}")
 	epoch_metrics_data.append(epoch_metrics)
+
+
+				
+	# ~ # calculate global metrics for this epoch
+	# ~ model.reset_metrics()
+	
+	# ~ for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+		# ~ # cast to float32 for speed and memory
+		# ~ batch_data = batch.to_pandas()
+		# ~ batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
+		# ~ batch_data_x = ipca.transform(batch_data_x).astype(np.float32)
+		# ~ batch_data_y = batch_data[y_column]
+		# ~ model.test_on_batch(batch_data_x, batch_data_y)
+
+	# ~ # get epoch metrics
+	# ~ epoch_metrics = {k: float(v) for k, v in model.get_metrics_result().items()}
+	# ~ loss = epoch_metrics["loss"]
+	# ~ pr_auc = epoch_metrics["pr_auc"]
+	# ~ precision = epoch_metrics["precision"]
+	# ~ recall = epoch_metrics["recall"]
+	# ~ print(f"Epoch {epoch+1} -> Loss: {loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+
+	# ~ epoch_metrics_data.append(epoch_metrics)
 
 epoch_metrics_data = pd.DataFrame(epoch_metrics_data)
 epoch_metrics_data.to_csv("mlp.epoch_metrics_data.csv")
