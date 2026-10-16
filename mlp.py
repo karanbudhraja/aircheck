@@ -6,6 +6,7 @@ import os
 import pandas as pd
 import pyarrow.parquet as pq
 from sklearn.decomposition import IncrementalPCA
+from sklearn.metrics import average_precision_score, precision_score, recall_score, log_loss
 
 INPUT_DATA_PATH = "~/Downloads/DREAM_Challenge_1_TrainSet.parquet"
 DATA_SUBSET_FRACTION = 0.01
@@ -160,6 +161,3 @@ for epoch in range(N_EPOCHS):
 
 epoch_metrics_data = pd.DataFrame(epoch_metrics_data)
 epoch_metrics_data.to_csv("mlp.epoch_metrics_data.csv")
-
-# ~ # save model
-# ~ model.save("mlp.keras")
