@@ -12,6 +12,7 @@ from sklearn.metrics import average_precision_score, precision_score, recall_sco
 import torch
 import torch.nn as nn
 from torch_geometric.data import Data
+from torch_geometric.loader import DataLoader
 from torch_geometric.nn import GINEConv, global_add_pool, global_mean_pool
 
 # ~ INPUT_DATA_PATH = "~/Downloads/DREAM_Challenge_1_TrainSet.parquet"
@@ -118,13 +119,13 @@ def smiles_to_graph_data(smiles_string, y):
 for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
 	batch_data = batch.to_pandas()	
 	batch_data = batch_data.apply(lambda x: smiles_to_graph_data(x[x_column], x[y_column]), axis=1)
+	batch_data = batch_data[batch_data.notna()].tolist()
 	
 	# all nodes will have the same feature set
 	break
 	
-batch_data = batch_data[batch_data.notna()]
 categorical_dims = get_atom_feature_dims() + [len(RING_SIZES) + 1]
-n_numeric = batch_data.iloc[0].x_numeric.size(1)
+n_numeric = batch_data[0].x_numeric.size(1)
 
 #
 # Neural network structure
@@ -142,7 +143,7 @@ class NodeEncoder(nn.Module):
             h = h + self.numeric_embedding(x_numeric)
         return h
         
-class MolClassifier(nn.Module):
+class MoleculeClassifier(nn.Module):
     def __init__(self, categorical_dims, n_numeric, n_hidden=N_HIDDEN, n_layers=N_LAYERS, dropout=DROPOUT):
         super().__init__()
         self.node_encoder = NodeEncoder(categorical_dims, n_numeric, n_hidden)
@@ -174,4 +175,84 @@ class MolClassifier(nn.Module):
 
         return self.head(g).squeeze(-1)
 
-model = MolClassifier(categorical_dims, n_numeric)
+#
+# Train model
+#
+
+torch.manual_seed(RANDOM_STATE)
+
+# standard scikit-learn formula: weight = 1 / (num_classes * class_rate)
+# manual limit based on square root of class imbalance
+# ~ weight_occurrence = 1.0 / (2 * base_occurrence_rate)
+# ~ weight_non_occurrence = 1.0 / (2 * (1-base_occurrence_rate))
+weight_occurrence = min(1.0 / base_occurrence_rate, 30.0)
+weight_non_occurrence = 1.0
+
+# use bcewithlogit loss with linear output instead of bceloss with sigmoid output for stability
+model = MoleculeClassifier(categorical_dims, n_numeric)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+loss_fn = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(weight_occurrence, dtype=torch.float))
+
+def calculate_metrics(y_true, y_prob):
+    y_pred = (y_prob >= 0.5).astype(int)
+    return {
+        "loss": log_loss(y_true, y_prob, labels=[0, 1]),
+        "pr_auc": average_precision_score(y_true, y_prob),
+        "precision": precision_score(y_true, y_pred, zero_division=0),
+        "recall": recall_score(y_true, y_pred, zero_division=0),
+    }
+
+epoch_metrics_data = []
+for epoch in range(N_EPOCHS):
+    epoch_batch_metrics_data = []
+    for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+		batch_data = batch.to_pandas()	
+		batch_data = batch_data.apply(lambda x: smiles_to_graph_data(x[x_column], x[y_column]), axis=1)
+		batch_data = batch_data[batch_data.notna()].tolist()
+		loader = DataLoader(batch_data, batch_size=256, shuffle=True)
+		
+		model.train()
+        y_true, y_prob = [], []
+        for graph_batch in loader:
+            logits = model(graph_batch)
+            loss = loss_fn(logits, graph_batch.y)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            y_true.append(graph_batch.y.numpy())
+            y_prob.append(torch.sigmoid(logits).detach().numpy())
+
+        current_metrics_data = calculate_metrics(np.concatenate(y_true), np.concatenate(y_prob))
+
+		loss = current_metrics_data["loss"]
+		pr_auc = current_metrics_data["pr_auc"]
+		precision = current_metrics_data["precision"]
+		recall = current_metrics_data["recall"]
+		print(f"Epoch {epoch+1} Batch {index+1} -> Loss: {loss:.4f} | PR-AUC: {pr_auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+
+		epoch_batch_metrics_data.append(current_metrics_data)
+
+	epoch_batch_metrics_data = pd.DataFrame(epoch_batch_metrics_data)
+	epoch_batch_metrics_data.to_csv(f"gnn.epoch_batch_metrics_data.{epoch+1}.csv")
+	
+	# calculate global metrics for this epoch
+	model.eval()
+    y_true, y_prob = [], []
+    with torch.no_grad():
+        for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+			batch_data = batch.to_pandas()	
+			batch_data = batch_data.apply(lambda x: smiles_to_graph_data(x[x_column], x[y_column]), axis=1)
+			batch_data = batch_data[batch_data.notna()].tolist()
+			loader = DataLoader(batch_data, batch_size=4096, shuffle=True)
+			
+            for graph_batch in loader:
+                y_prob.append(torch.sigmoid(model(graph_batch)).numpy())
+                y_true.append(graph_batch.y.numpy())
+
+    epoch_metrics = calculate_metrics(np.concatenate(y_true), np.concatenate(y_prob))
+	print(f"Epoch {epoch+1} -> Loss: {epoch_metrics['loss']:.4f} | PR-AUC: {epoch_metrics['pr_auc']:.4f} | "
+	      f"Precision: {epoch_metrics['precision']:.4f} | Recall: {epoch_metrics['recall']:.4f}")
+	epoch_metrics_data.append(epoch_metrics)
+
+epoch_metrics_data = pd.DataFrame(epoch_metrics_data)
+epoch_metrics_data.to_csv("gnn.epoch_metrics_data.csv")
