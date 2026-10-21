@@ -204,25 +204,25 @@ def calculate_metrics(y_true, y_prob):
 
 epoch_metrics_data = []
 for epoch in range(N_EPOCHS):
-    epoch_batch_metrics_data = []
-    for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
-		batch_data = batch.to_pandas()	
+	epoch_batch_metrics_data = []
+	for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+		batch_data = batch.to_pandas()
 		batch_data = batch_data.apply(lambda x: smiles_to_graph_data(x[x_column], x[y_column]), axis=1)
 		batch_data = batch_data[batch_data.notna()].tolist()
 		loader = DataLoader(batch_data, batch_size=256, shuffle=True)
 		
 		model.train()
-        y_true, y_prob = [], []
-        for graph_batch in loader:
-            logits = model(graph_batch)
-            loss = loss_fn(logits, graph_batch.y)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            y_true.append(graph_batch.y.numpy())
-            y_prob.append(torch.sigmoid(logits).detach().numpy())
+		y_true, y_prob = [], []
+		for graph_batch in loader:
+			logits = model(graph_batch)
+			loss = loss_fn(logits, graph_batch.y)
+			optimizer.zero_grad()
+			loss.backward()
+			optimizer.step()
+			y_true.append(graph_batch.y.numpy())
+			y_prob.append(torch.sigmoid(logits).detach().numpy())
 
-        current_metrics_data = calculate_metrics(np.concatenate(y_true), np.concatenate(y_prob))
+		current_metrics_data = calculate_metrics(np.concatenate(y_true), np.concatenate(y_prob))
 
 		loss = current_metrics_data["loss"]
 		pr_auc = current_metrics_data["pr_auc"]
@@ -237,19 +237,19 @@ for epoch in range(N_EPOCHS):
 	
 	# calculate global metrics for this epoch
 	model.eval()
-    y_true, y_prob = [], []
-    with torch.no_grad():
-        for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+	y_true, y_prob = [], []
+	with torch.no_grad():
+		for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
 			batch_data = batch.to_pandas()	
 			batch_data = batch_data.apply(lambda x: smiles_to_graph_data(x[x_column], x[y_column]), axis=1)
 			batch_data = batch_data[batch_data.notna()].tolist()
 			loader = DataLoader(batch_data, batch_size=4096, shuffle=True)
-			
-            for graph_batch in loader:
-                y_prob.append(torch.sigmoid(model(graph_batch)).numpy())
-                y_true.append(graph_batch.y.numpy())
 
-    epoch_metrics = calculate_metrics(np.concatenate(y_true), np.concatenate(y_prob))
+			for graph_batch in loader:
+				y_prob.append(torch.sigmoid(model(graph_batch)).numpy())
+				y_true.append(graph_batch.y.numpy())
+
+	epoch_metrics = calculate_metrics(np.concatenate(y_true), np.concatenate(y_prob))
 	print(f"Epoch {epoch+1} -> Loss: {epoch_metrics['loss']:.4f} | PR-AUC: {epoch_metrics['pr_auc']:.4f} | "
 	      f"Precision: {epoch_metrics['precision']:.4f} | Recall: {epoch_metrics['recall']:.4f}")
 	epoch_metrics_data.append(epoch_metrics)
