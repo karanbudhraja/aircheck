@@ -9,6 +9,7 @@ import pyarrow.parquet as pq
 from rdkit import Chem
 from sklearn.decomposition import IncrementalPCA
 from sklearn.metrics import average_precision_score, precision_score, recall_score, log_loss
+from sklearn.preprocessing import StandardScaler
 import torch
 import torch.nn as nn
 from torch_geometric.data import Data
@@ -69,7 +70,7 @@ print(f"Base occurrence rate is {base_occurrence_rate}")
 # Graph parameters
 #
 
-def get_molecule_features(mol):
+def get_numeric_features(mol):
 	mol_features = [[x.GetMass()] for x in mol.GetAtoms()]
 	
 	return mol_features
@@ -104,8 +105,8 @@ def smiles_to_graph_data(smiles_string, y):
 	], dim=1),
 
 	# numeric features
-	x_numeric=torch.tensor(get_molecule_features(molecule), dtype=torch.float),
-
+	x_numeric=torch.tensor(scaler.transform(np.array(get_numeric_features(molecule))), dtype=torch.float),
+	
 	# metadata
 	edge_index=torch.tensor(graph["edge_index"], dtype=torch.long),
 	edge_attr=torch.tensor(graph["edge_feat"], dtype=torch.long),
@@ -115,7 +116,26 @@ def smiles_to_graph_data(smiles_string, y):
 	)
 	
 	return graph_data
-    
+
+# numeric feature scaling
+save_path = "numeric_scaler.joblib"
+if (is_use_cache == False) or (os.path.exists(save_path) == False):
+    scaler = StandardScaler()
+    for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+        batch_data = batch.to_pandas()
+        for smiles_string in batch_data[x_column]:
+            molecule = Chem.MolFromSmiles(smiles_string)
+            if molecule is not None:
+                scaler.partial_fit(np.array(get_numeric_features(molecule)))
+
+        print(f"Processed scaler fit batch # {index+1}")
+
+	# save to cache
+    joblib.dump(scaler, save_path)
+
+scaler = joblib.load(save_path)
+
+# feature sizes
 for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
 	batch_data = batch.to_pandas()	
 	batch_data = batch_data.apply(lambda x: smiles_to_graph_data(x[x_column], x[y_column]), axis=1)
