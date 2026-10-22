@@ -210,7 +210,8 @@ weight_non_occurrence = 1.0
 
 # use bcewithlogit loss with linear output instead of bceloss with sigmoid output for stability
 model = MoleculeClassifier(categorical_dims, n_numeric)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=N_EPOCHS)
 loss_fn = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(weight_occurrence, dtype=torch.float))
 
 def calculate_metrics(y_true, y_prob):
@@ -238,6 +239,10 @@ for epoch in range(N_EPOCHS):
 			loss = loss_fn(logits, graph_batch.y)
 			optimizer.zero_grad()
 			loss.backward()
+			
+			# clip gradients to reduce noise
+			torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+			
 			optimizer.step()
 			y_true.append(graph_batch.y.numpy())
 			y_prob.append(torch.sigmoid(logits).detach().numpy())
@@ -273,6 +278,9 @@ for epoch in range(N_EPOCHS):
 	print(f"Epoch {epoch+1} -> Loss: {epoch_metrics['loss']:.4f} | PR-AUC: {epoch_metrics['pr_auc']:.4f} | "
 	      f"Precision: {epoch_metrics['precision']:.4f} | Recall: {epoch_metrics['recall']:.4f}")
 	epoch_metrics_data.append(epoch_metrics)
+	
+	# lower learning rate
+	scheduler.step()
 
 epoch_metrics_data = pd.DataFrame(epoch_metrics_data)
 epoch_metrics_data.to_csv("gnn.epoch_metrics_data.csv")
