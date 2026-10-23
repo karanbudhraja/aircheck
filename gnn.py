@@ -21,7 +21,7 @@ INPUT_DATA_PATH = "~/Downloads/DREAM_Challenge_1_TrainSet.subset.parquet"
 
 DATA_SUBSET_FRACTION = 0.01
 RANDOM_STATE = 0
-N_EPOCHS = 30
+N_EPOCHS = 100
 N_HIDDEN = 128
 N_LAYERS = 3
 DROPOUT = 0.2
@@ -258,7 +258,7 @@ for epoch in range(N_EPOCHS):
 		epoch_batch_metrics_data.append(current_metrics_data)
 
 	epoch_batch_metrics_data = pd.DataFrame(epoch_batch_metrics_data)
-	epoch_batch_metrics_data.to_csv(f"gnn.epoch_batch_metrics_data.{epoch+1}.csv")
+	# ~ epoch_batch_metrics_data.to_csv(f"gnn.epoch_batch_metrics_data.{epoch+1}.csv")
 	
 	# calculate global metrics for this epoch
 	model.eval()
