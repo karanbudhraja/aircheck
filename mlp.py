@@ -142,7 +142,7 @@ for epoch in range(N_EPOCHS):
 		epoch_batch_metrics_data.append(current_metrics_data)
 
 	epoch_batch_metrics_data = pd.DataFrame(epoch_batch_metrics_data)
-	epoch_batch_metrics_data.to_csv(f"mlp.epoch_batch_metrics_data.{epoch+1}.csv")
+	# ~ epoch_batch_metrics_data.to_csv(f"mlp.epoch_batch_metrics_data.{epoch+1}.csv")
 
 	# calculate global metrics for this epoch
 	y_true, y_prob = [], []
