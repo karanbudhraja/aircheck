@@ -39,8 +39,33 @@ total_row_count = parquet_file.metadata.num_rows
 subset_row_count = int(total_row_count * DATA_SUBSET_FRACTION)
 print(f"Loading {subset_row_count}/{total_row_count} rows per batch")
 
-x_column = "SMILES"
+mlp_x_columns = ["AVALON", "FCFP4", "FCFP6"]
+gnn_x_column = "SMILES"
 y_column = "LABEL"
+
+#
+# Train data projection
+#
+
+save_path = f"ipca.{N_COMPONENTS}.joblib"
+if (is_use_cache == False) or (os.path.exists(save_path) == False):
+	ipca = IncrementalPCA(n_components=N_COMPONENTS, batch_size=subset_row_count, whiten=True)
+	for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
+		batch_data = batch.to_pandas()
+		batch_data_x = np.hstack([np.vstack(batch_data[x]) for x in x_columns])
+
+		# skip if insufficient rows
+		if len(batch_data_x) < N_COMPONENTS:
+			print(f"Skipping IPCA batch # {index+1} ({len(batch_data_x)} rows)")
+			continue
+		ipca.partial_fit(batch_data_x)
+	  
+		print(f"Processed IPCA fit batch # {index+1}")
+		
+	# save to cache
+	joblib.dump(ipca, save_path)
+
+ipca = joblib.load(save_path)
 
 #
 # Base occurrence rate
@@ -79,7 +104,8 @@ def get_categorical_features(mol):
     ring_information = mol.GetRingInfo()
     mol_features = []
     for atom in mol.GetAtoms():
-        code = len(RING_SIZES)                   # default: other
+		# default code outside of existing sizes
+        code = len(RING_SIZES)
         for (index, size) in enumerate(RING_SIZES):
             if ring_information.IsAtomInRingOfSize(atom.GetIdx(), size):
                 code = index
@@ -122,7 +148,7 @@ if (is_use_cache == False) or (os.path.exists(save_path) == False):
     scaler = StandardScaler()
     for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
         batch_data = batch.to_pandas()
-        for smiles_string in batch_data[x_column]:
+        for smiles_string in batch_data[gnn_x_column]:
             molecule = Chem.MolFromSmiles(smiles_string)
             if molecule is not None:
                 scaler.partial_fit(np.array(get_numeric_features(molecule)))
@@ -137,7 +163,7 @@ scaler = joblib.load(save_path)
 # feature sizes
 for (index, batch) in enumerate(parquet_file.iter_batches(batch_size=subset_row_count)):
 	batch_data = batch.to_pandas()	
-	batch_data = batch_data.apply(lambda x: smiles_to_graph_data(x[x_column], x[y_column]), axis=1)
+	batch_data = batch_data.apply(lambda x: smiles_to_graph_data(x[gnn_x_column], x[y_column]), axis=1)
 	batch_data = batch_data[batch_data.notna()].tolist()
 	
 	# all nodes will have the same feature set
@@ -193,3 +219,5 @@ class GNNMoleculeEncoder(nn.Module):
 
         return self.head(g)
 
+class MLPEncoder(nn.Module):
+	pass

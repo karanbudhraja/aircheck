@@ -79,7 +79,8 @@ def get_categorical_features(mol):
     ring_information = mol.GetRingInfo()
     mol_features = []
     for atom in mol.GetAtoms():
-        code = len(RING_SIZES)                   # default: other
+		# default code outside of existing sizes
+        code = len(RING_SIZES)
         for (index, size) in enumerate(RING_SIZES):
             if ring_information.IsAtomInRingOfSize(atom.GetIdx(), size):
                 code = index
@@ -88,7 +89,6 @@ def get_categorical_features(mol):
 
     return mol_features
 
-	
 def smiles_to_graph_data(smiles_string, y):
 	try:
 		graph = smiles2graph(smiles_string)
