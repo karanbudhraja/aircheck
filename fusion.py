@@ -88,7 +88,6 @@ def get_categorical_features(mol):
 
     return mol_features
 
-	
 def smiles_to_graph_data(smiles_string, y):
 	try:
 		graph = smiles2graph(smiles_string)
